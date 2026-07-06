@@ -2,31 +2,35 @@ import binaryen from "binaryen";
 import { ArmSystem } from "./system.js";
 import { writeFileSync } from "fs";
 
-// 値の変化を監視するための徹底的なログ
+// 値の変化を出力するための徹底的なカスタムログ
 function missionLog(type: string, message: string) {
     console.log(`[${type}] [${new Date().toISOString()}] ${message}`);
 }
 
 try {
-    missionLog("SYSTEM", "超軽量 WE Android Engine (ARM64 JIT VM) 本格駆動テスト開始！");
+    missionLog("SYSTEM", "超軽量 WE Android Engine (ARM64 JIT VM) 安定駆動テスト開始！");
 
     // ============================================================================
-    // 1. テスト用の生ARM64バイナリ（linux.bin）を組み立てる
+    // 1. 本格的なARM64テストバイナリの組み立て
     // ============================================================================
-    // リトルエンディアン形式の NOP 命令（0xd503201f）を2つ配置
+    // 命令1: 0xd503201f -> NOP (何もしない) [アドレス: 2MB + 0]
+    // 命令2: 0xd503201f -> NOP (何もしない) [アドレス: 2MB + 4]
+    // 命令3: 0x14000000 -> B 0 (現在のアドレスへ無限ループ) [アドレス: 2MB + 8]
+    // ※ リトルエンディアン形式でバイト配列化するぞ！
     const arm64Instructions = new Uint8Array([
-        0x1f, 0x20, 0x03, 0xd5, // 1つ目の NOP
-        0x1f, 0x20, 0x03, 0xd5, // 2つ目の NOP
-        0x00, 0x00, 0x00, 0x00  // 終端
+        0x1f, 0x20, 0x03, 0xd5, // 1: NOP
+        0x1f, 0x20, 0x03, 0xd5, // 2: NOP
+        0x00, 0x00, 0x00, 0x14  // 3: B . (自分自身へジャンプする無限ループ命令！)
     ]);
 
     writeFileSync("linux.bin", arm64Instructions);
-    missionLog("FS", `テスト用ミニマムARM64命令 (linux.bin) を生成しました。サイズ: ${arm64Instructions.byteLength} bytes`);
+    missionLog("FS", `無限ループ付きARM64命令 (linux.bin) を生成。サイズ: ${arm64Instructions.byteLength} bytes`);
 
     // ============================================================================
-    // 2. 仮想マシンの起動と値の監視
+    // 2. 仮想マシンの起動と内部ハック
     // ============================================================================
-    // 【修正ポイント】 WebAssembly.Memory の下限突破を防ぐため、十分なサイズ（1024MB）を確保！
+    missionLog("SYSTEM", "ArmSystem を起動します。内部コンストラクタで自動的に 2MB 地点から実行されます。");
+    
     const system = new ArmSystem({
         memory: {
             maxSizeMb: 1024
@@ -35,31 +39,18 @@ try {
             image: arm64Instructions.buffer
         }
     });
-    missionLog("SYSTEM", "ArmSystem の初期化に成功しました！");
 
-    // CPUの内部構造を暴いてステップ実行を試みる
+    missionLog("SYSTEM", "ArmSystem の初期実行が完了、またはループを維持しています。");
+
+    // 実行完了後にレジスタや内部状態にどんな値が入っているかを一本釣りして missionLog に出す
     const cpu = (system as any).cpu;
     if (cpu) {
-        missionLog("CPU", `初期状態プログラムカウンタ (PC): 0x${cpu.pc?.toString(16)}`);
-        
-        // 実行メソッドの調査とステップ実行の試行
-        if (typeof cpu.step === "function") {
-            missionLog("CPU", "第1命令を実行します...");
-            cpu.step();
-            missionLog("CPU_VAL", `値の変化 -> 現在のPC: 0x${cpu.pc?.toString(16)}`);
-            
-            missionLog("CPU", "第2命令を実行します...");
-            cpu.step();
-            missionLog("CPU_VAL", `値の変化 -> 現在のPC: 0x${cpu.pc?.toString(16)}`);
-        } else if (typeof (system as any).execute === "function") {
-            missionLog("SYSTEM", "システム全体の実行ループをキックします。");
-            (system as any).execute();
+        if (cpu.registers) {
+            missionLog("CPU_VAL", `最終レジスタ状態: ${JSON.stringify(cpu.registers)}`);
         } else {
-            // メソッドが不明な場合はオブジェクトのキーをすべてログに出してハックの手がかりにする
+            // registersが直接見えない場合はキーを全走査して値の格納先を暴く
             const cpuKeys = Object.keys(cpu);
-            const systemKeys = Object.keys(system);
-            missionLog("CPU_INSIGHT", `CPU内部プロパティ: ${JSON.stringify(cpuKeys)}`);
-            missionLog("SYS_INSIGHT", `System内部プロパティ: ${JSON.stringify(systemKeys)}`);
+            missionLog("CPU_INSIGHT", `CPU内部の生存キー一覧: ${JSON.stringify(cpuKeys)}`);
         }
     }
 
@@ -69,7 +60,7 @@ try {
 }
 
 // ============================================================================
-// 3. Binaryen による動的Wasmコンパイルコアテスト
+// 3. Binaryen コアテスト（現状維持で通過させる）
 // ============================================================================
 try {
     missionLog("JIT_TEST", "Binaryen 動的コンパイル検証...");
