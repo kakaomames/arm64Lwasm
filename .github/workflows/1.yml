@@ -1,4 +1,4 @@
-name: Android-Wasm
+name: linux-Wasm
 
 on:
   workflow_dispatch: # ボタン一発で手動起動！
