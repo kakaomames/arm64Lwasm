@@ -28,6 +28,10 @@ jobs:
         run: |
           echo ".../arm64Lwasm/ $ ls -F ./"
           ls -F ./ 
+          echo ".../arm64Lwasm/ $ ls -F ./src"
+          ls -F ./src
+          echo ".../arm64Lwasm/ $ ls -F ./src/instructions"
+          ls -F ./src/instructions
           # 1. 依存関係を綺麗に叩き込む！
           echo ".../arm64Lwasm/ $ pnpm install"
           pnpm install
