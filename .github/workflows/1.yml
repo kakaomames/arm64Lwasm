@@ -12,6 +12,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 偵察兵（Node.js環境のセットアップ）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 補給部隊（pnpmのインストールとキャッシュ設定）
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          run_install: false
 
       - name: Start!!
         run: |
