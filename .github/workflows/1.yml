@@ -17,6 +17,12 @@ jobs:
         run: |
           echo ".../arm64Lwasm/ $ ls -F ./"
           ls -F ./ 
+          # 1. 依存関係を綺麗に叩き込む！
+          echo ".../arm64Lwasm/ $ pnpm install"
+          pnpm install
+          # 2. 開発用サーバーを起動する！
+          echo ".../arm64Lwasm/ $ pnpm run dev"
+          pnpm run dev
 
       - name: Auto-commit results
         run: |
