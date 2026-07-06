@@ -2,7 +2,7 @@ import binaryen from "binaryen";
 import { ArmSystem } from "./system.js";
 import { writeFileSync } from "fs";
 
-// カカオマメ隊員指定の徹底的な変化出力ログ
+// 値の変化を監視するための徹底的なログ
 function missionLog(type: string, message: string) {
     console.log(`[${type}] [${new Date().toISOString()}] ${message}`);
 }
@@ -11,16 +11,13 @@ try {
     missionLog("SYSTEM", "超軽量 WE Android Engine (ARM64 JIT VM) 本格駆動テスト開始！");
 
     // ============================================================================
-    // 1. テスト用の生ARM64バイナリ（linux.binの代わり）を組み立てる
+    // 1. テスト用の生ARM64バイナリ（linux.bin）を組み立てる
     // ============================================================================
-    // ARM64の命令はすべて1つの命令が「4バイト（32bit）」固定長だ！
-    // 以下のバイト配列で簡単なプログラムを偽装する：
-    // 命令1: d503201f -> NOP (何もしない)
-    // 命令2: d503201f -> NOP (何もしない)
+    // リトルエンディアン形式の NOP 命令（0xd503201f）を2つ配置
     const arm64Instructions = new Uint8Array([
-        0x1f, 0x20, 0x03, 0xd5, // 1つ目の NOP (リトルエンディアン形式)
+        0x1f, 0x20, 0x03, 0xd5, // 1つ目の NOP
         0x1f, 0x20, 0x03, 0xd5, // 2つ目の NOP
-        0x00, 0x00, 0x00, 0x00  // 終端 (または未定義命令で安全に止めるためのダミー)
+        0x00, 0x00, 0x00, 0x00  // 終端
     ]);
 
     writeFileSync("linux.bin", arm64Instructions);
@@ -29,38 +26,40 @@ try {
     // ============================================================================
     // 2. 仮想マシンの起動と値の監視
     // ============================================================================
+    // 【修正ポイント】 WebAssembly.Memory の下限突破を防ぐため、十分なサイズ（1024MB）を確保！
     const system = new ArmSystem({
         memory: {
-            maxSizeMb: 16 // テスト用なので軽量に16MB確保
+            maxSizeMb: 1024
         },
         linux: {
             image: arm64Instructions.buffer
         }
     });
-    missionLog("SYSTEM", "ArmSystem の初期化に成功。");
+    missionLog("SYSTEM", "ArmSystem の初期化に成功しました！");
 
-    // CPUインスタンスへのアクセスを試みる (src/cpu.ts の実態を補足)
+    // CPUの内部構造を暴いてステップ実行を試みる
     const cpu = (system as any).cpu;
     if (cpu) {
         missionLog("CPU", `初期状態プログラムカウンタ (PC): 0x${cpu.pc?.toString(16)}`);
         
-        // 1ステップ実行させる（もし実行関数が step() や execute() として公開されている場合）
+        // 実行メソッドの調査とステップ実行の試行
         if (typeof cpu.step === "function") {
-            missionLog("CPU", "第1命令 (NOP) を実行します...");
+            missionLog("CPU", "第1命令を実行します...");
             cpu.step();
-            missionLog("CPU_VAL", `値の変化を検出 -> 現在のPC: 0x${cpu.pc?.toString(16)}`);
+            missionLog("CPU_VAL", `値の変化 -> 現在のPC: 0x${cpu.pc?.toString(16)}`);
             
-            missionLog("CPU", "第2命令 (NOP) を実行します...");
+            missionLog("CPU", "第2命令を実行します...");
             cpu.step();
-            missionLog("CPU_VAL", `値の変化を検出 -> 現在のPC: 0x${cpu.pc?.toString(16)}`);
-        } else if (typeof system.execute === "function") {
+            missionLog("CPU_VAL", `値の変化 -> 現在のPC: 0x${cpu.pc?.toString(16)}`);
+        } else if (typeof (system as any).execute === "function") {
             missionLog("SYSTEM", "システム全体の実行ループをキックします。");
             (system as any).execute();
         } else {
-            missionLog("WARN", "CPUの直接ステップ実行メソッドが見つからないため、静的解析モードへ移行します。");
-            // cpu の中身にどんなプロパティや関数があるかを一覧にして missionLog に吐き出す！
+            // メソッドが不明な場合はオブジェクトのキーをすべてログに出してハックの手がかりにする
             const cpuKeys = Object.keys(cpu);
-            missionLog("CPU_INSIGHT", `CPU内部の利用可能インターフェース: ${JSON.stringify(cpuKeys)}`);
+            const systemKeys = Object.keys(system);
+            missionLog("CPU_INSIGHT", `CPU内部プロパティ: ${JSON.stringify(cpuKeys)}`);
+            missionLog("SYS_INSIGHT", `System内部プロパティ: ${JSON.stringify(systemKeys)}`);
         }
     }
 
