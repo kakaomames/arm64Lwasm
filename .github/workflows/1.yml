@@ -32,8 +32,7 @@ jobs:
           echo ".../arm64Lwasm/ $ pnpm install"
           pnpm install
           # 2. 開発用サーバーを起動する！
-          echo ".../arm64Lwasm/ $ pnpm run dev"
-          pnpm run dev
+          echo ".../arm64Lwasm/ $ "
           echo ".../arm64Lwasm/ $ pnpm install --frozen-lockfile"
           pnpm install --frozen-lockfile
           echo ".../arm64Lwasm/ $ touch linux.bin"
